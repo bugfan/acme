@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-acme/lego/certcrypto"
 	"github.com/go-acme/lego/certificate"
@@ -63,7 +64,12 @@ func main() {
 	// because we aren't running as root and can't bind a listener to port 80 and 443
 	// (used later when we attempt to pass challenges). Keep in mind that you still
 	// need to proxy challenge traffic to port 5002 and 5001.
-	err = client.Challenge.SetHTTP01Provider(NewHTTP01Provider())
+	http01 := NewHTTP01Provider()
+	go func() {
+		http.ListenAndServe(":80", http01)
+	}()
+	time.Sleep(1e9)
+	err = client.Challenge.SetHTTP01Provider(http01)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -125,6 +131,7 @@ func (s *HTTP01Provider) CleanUp(domain, token, keyAuth string) error {
 }
 
 func (s *HTTP01Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("in http 01 serverhttp:", r.URL.String())
 	if r.Method == http.MethodGet {
 		token := s.tokens[r.Host]
 		if token != "" && r.URL.Path == ChallengePath(token) {
