@@ -20,3 +20,15 @@
 
 
  ```
+ 2. tls
+ ```
+root@VM-0-10-ubuntu:/home# ./acem 
+2021/03/10 18:20:31 [INFO] acme: Registering account for 917719033@qq.com
+2021/03/10 18:20:32 [INFO] [www.lbelieve.cn] acme: Obtaining bundled SAN certificate
+2021/03/10 18:20:32 [INFO] [www.lbelieve.cn] AuthURL: https://acme-v02.api.letsencrypt.org/acme/authz-v3/11452689397
+2021/03/10 18:20:32 [INFO] [www.lbelieve.cn] acme: use tls-alpn-01 solver
+2021/03/10 18:20:32 [INFO] [www.lbelieve.cn] acme: Trying to solve TLS-ALPN-01
+2021/03/10 18:20:39 [INFO] Unable to deactivate the authorization: https://acme-v02.api.letsencrypt.org/acme/authz-v3/11452689397
+2021/03/10 18:20:39 acme: Error -> One or more domains had a problem:
+[www.lbelieve.cn] acme: error: 400 :: urn:ietf:params:acme:error:malformed :: Server only speaks HTTP, not TLS, url:
+ ```

@@ -1,14 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-acme/lego/certcrypto"
@@ -65,18 +72,32 @@ func main() {
 	// (used later when we attempt to pass challenges). Keep in mind that you still
 	// need to proxy challenge traffic to port 5002 and 5001.
 	http01 := NewHTTP01Provider()
-	go func() {
-		http.ListenAndServe(":80", http01)
-	}()
-	time.Sleep(1e9)
-	err = client.Challenge.SetHTTP01Provider(http01)
-	if err != nil {
-		log.Fatal(err)
+	tls01 := NewTLSALPN01Provider()
+
+	av := os.Getenv("ACME_V")
+	if av != "" {
+		go func() {
+			http.ListenAndServe(":80", http01)
+		}()
+	} else {
+		go func() {
+			http.ListenAndServe(":443", nil)
+		}()
 	}
-	// err = client.Challenge.SetTLSALPN01Provider(NewTLSALPN01Provider())
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+
+	if av != "" {
+		time.Sleep(1e9)
+		err = client.Challenge.SetHTTP01Provider(http01)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		time.Sleep(1e9)
+		err = client.Challenge.SetTLSALPN01Provider(tls01)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	// New users will need to register
 	reg, err := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
@@ -86,7 +107,7 @@ func main() {
 	myUser.Registration = reg
 
 	request := certificate.ObtainRequest{
-		Domains: []string{"app.lt53.cn"},
+		Domains: []string{"www.lbelieve.cn"},
 		Bundle:  true,
 	}
 	certificates, err := client.Certificate.Obtain(request)
@@ -97,8 +118,52 @@ func main() {
 	// Each certificate comes back with the cert bytes, the bytes of the client's
 	// private key, and a certificate URL. SAVE THESE TO DISK.
 	fmt.Printf("%#v\n", certificates)
+	data, err := json.Marshal(certificates)
+	fmt.Printf("aaa %#v\n", err, string(data))
+	crt, err := ParseCertificate(string(certificates.Certificate)+string(certificates.IssuerCertificate), string(certificates.PrivateKey))
+	fmt.Println("CERT:", err, crt.Name, crt.Key, crt.Cert)
+}
+func ParseCertificate(certPEMBlock, keyPEMBlock string) (*Certificate, error) {
+	tlsCert, err := tls.X509KeyPair([]byte(certPEMBlock), []byte(keyPEMBlock))
+	if err != nil {
+		return nil, err
+	}
+	leaf := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tlsCert.Certificate[0]}))
+	var intermediate string
+	if len(tlsCert.Certificate) > 1 {
+		buffer := bytes.NewBuffer([]byte{})
+		for _, cert := range tlsCert.Certificate[1:] {
+			_ = pem.Encode(buffer, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
+		}
+		intermediate = buffer.String()
+	}
+	var key string
+	switch k := tlsCert.PrivateKey.(type) {
+	case *rsa.PrivateKey:
+		key = string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}))
+	case *ecdsa.PrivateKey:
+		b, err := x509.MarshalECPrivateKey(k)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to marshal ECDSA private key: %v", err)
+			os.Exit(2)
+		}
+		key = string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: b}))
+	default:
+		return nil, errors.New("unsupported privatekey")
+	}
+	return &Certificate{
+		Cert:         leaf,
+		Key:          key,
+		Intermediate: intermediate,
+	}, nil
+}
 
-	// ... all done.
+type Certificate struct {
+	ID           int64
+	Name         string
+	Cert         string `xorm:"TEXT"`
+	Key          string `xorm:"TEXT"`
+	Intermediate string `xorm:"TEXT"`
 }
 
 type HTTP01Provider struct {
