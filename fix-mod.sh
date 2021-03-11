@@ -1,4 +1,4 @@
-# to fix mac vscode no code pursuit
+# to fix mac'vscode no code pursuit
 file="./go.mod"
 if [ -f "$file" ]; then
     mv go.mod go.mod1
