@@ -1,4 +1,4 @@
-package acme
+package main
 
 import (
 	"bytes"
@@ -16,16 +16,16 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"testing"
 	"time"
 
-	"github.com/go-acme/lego/certcrypto"
-	"github.com/go-acme/lego/certificate"
-	"github.com/go-acme/lego/lego"
-	"github.com/go-acme/lego/registration"
+	"github.com/bugfan/acme/certcrypto"
+	"github.com/bugfan/acme/certificate"
+	"github.com/bugfan/acme/lego"
+	"github.com/bugfan/acme/provider"
+	"github.com/bugfan/acme/registration"
 )
 
-func TestACME(*testing.T) {
+func main() {
 
 	Obtain()
 }
@@ -57,8 +57,8 @@ func Obtain() {
 	// because we aren't running as root and can't bind a listener to port 80 and 443
 	// (used later when we attempt to pass challenges). Keep in mind that you still
 	// need to proxy challenge traffic to port 5002 and 5001.
-	http01 := NewHTTP01Provider()
-	tls01 := NewTLSALPN01Provider()
+	http01 := provider.NewHTTP01Provider()
+	tls01 := provider.NewTLSALPN01Provider()
 
 	av := os.Getenv("ACME_V")
 	if av != "" {
