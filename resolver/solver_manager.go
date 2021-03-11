@@ -11,12 +11,11 @@ import (
 	"log"
 
 	"github.com/bugfan/acme/acme"
-	"github.com/bugfan/acme/challenge/tlsalpn01"
-	"github.com/cenkalti/backoff/v4"
 	"github.com/bugfan/acme/acme/api"
 	"github.com/bugfan/acme/challenge"
-	"github.com/bugfan/acme/challenge/dns01"
 	"github.com/bugfan/acme/challenge/http01"
+	"github.com/bugfan/acme/challenge/tlsalpn01"
+	"github.com/cenkalti/backoff/v4"
 )
 
 type byType []acme.Challenge
@@ -46,12 +45,6 @@ func (c *SolverManager) SetHTTP01Provider(p challenge.Provider) error {
 // SetTLSALPN01Provider specifies a custom provider p that can solve the given TLS-ALPN-01 challenge.
 func (c *SolverManager) SetTLSALPN01Provider(p challenge.Provider) error {
 	c.solvers[challenge.TLSALPN01] = tlsalpn01.NewChallenge(c.core, validate, p)
-	return nil
-}
-
-// SetDNS01Provider specifies a custom provider p that can solve the given DNS-01 challenge.
-func (c *SolverManager) SetDNS01Provider(p challenge.Provider, opts ...dns01.ChallengeOption) error {
-	c.solvers[challenge.DNS01] = dns01.NewChallenge(c.core, validate, p, opts...)
 	return nil
 }
 
