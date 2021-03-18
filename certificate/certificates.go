@@ -14,9 +14,9 @@ import (
 
 	"log"
 
-	"github.com/bugfan/acme/certcrypto"
 	"github.com/bugfan/acme/acme"
 	"github.com/bugfan/acme/acme/api"
+	"github.com/bugfan/acme/certcrypto"
 	"github.com/bugfan/acme/challenge"
 	"github.com/bugfan/acme/platform/wait"
 	"golang.org/x/crypto/ocsp"
