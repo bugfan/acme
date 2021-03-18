@@ -9,11 +9,9 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -67,52 +65,43 @@ func NewACMEWithDir(Email string, LetsEncryptDIR string) (*ACME, error) {
 }
 
 type ACME struct {
-	cli           *lego.Client
-	user          *acmeUser
-	http01Handler http.Handler
+	cli            *lego.Client
+	user           *acmeUser
+	http01Provider Provider
 }
 
-func (a *ACME) SetHTTPHandler(h http.Handler) {
-	a.http01Handler = h
+func (a *ACME) SetHTTP01Provider(p Provider) {
+	a.http01Provider = p
 }
 
-func (a *ACME) Obtain(domain ...string) {
-	// We specify an HTTP port of 5002 and an TLS port of 5001 on all interfaces
-	// because we aren't running as root and can't bind a listener to port 80 and 443
-	// (used later when we attempt to pass challenges). Keep in mind that you still
-	// need to proxy challenge traffic to port 5002 and 5001.
-	http01 := NewHTTP01Provider()
+func (a *ACME) Obtain(domain ...string) (*Certificate, error) {
+	// http01 := NewHTTP01Provider()
 	// tls01 := NewTLSALPN01Provider()
 
-	av := os.Getenv("ACME_V")
-	if av == "" {
+	if a.http01Provider != nil {
 		go func() {
-			http.ListenAndServe(":80", http01)
+			http.ListenAndServe(":80", a.http01Provider)
 		}()
-	} else {
-		// go func() {
-		// 	http.ListenAndServe(":443", nil)
-		// }()
+		time.Sleep(time.Second / 10)
 	}
 
-	if av == "" {
-		time.Sleep(1e9)
-		err := a.cli.Challenge.SetHTTP01Provider(http01)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		// time.Sleep(1e9)
-		// err = client.Challenge.SetTLSALPN01Provider(tls01)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
+	// go func() {
+	// 	http.ListenAndServe(":443", nil)
+	// }()
+
+	err := a.cli.Challenge.SetHTTP01Provider(a.http01Provider)
+	if err != nil {
+		return nil, err
 	}
 
-	// // New users will need to register
+	// err = client.Challenge.SetTLSALPN01Provider(tls01)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
 	reg, err := a.cli.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	a.user.Registration = reg
 
@@ -122,16 +111,12 @@ func (a *ACME) Obtain(domain ...string) {
 	}
 	certificates, err := a.cli.Certificate.Obtain(request)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// Each certificate comes back with the cert bytes, the bytes of the client's
 	// private key, and a certificate URL. SAVE THESE TO DISK.
-	fmt.Printf("%#v\n", certificates)
-	data, err := json.Marshal(certificates)
-	fmt.Println("aaa :", err, string(data))
-	crt, err := ParseCertificate(string(certificates.Certificate)+string(certificates.IssuerCertificate), string(certificates.PrivateKey))
-	fmt.Println("CERT:", err, crt.Key, crt.Cert, crt.Intermediate)
+	return ParseCertificate(string(certificates.Certificate)+string(certificates.IssuerCertificate), string(certificates.PrivateKey))
 }
 
 type acmeUser struct {
