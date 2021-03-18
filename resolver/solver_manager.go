@@ -15,7 +15,7 @@ import (
 	"github.com/bugfan/acme/challenge"
 	"github.com/bugfan/acme/challenge/http01"
 	"github.com/bugfan/acme/challenge/tlsalpn01"
-	"github.com/cenkalti/backoff/v4"
+	"github.com/cenkalti/backoff"
 )
 
 type byType []acme.Challenge

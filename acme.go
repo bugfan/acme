@@ -1,4 +1,4 @@
-package main
+package acme
 
 import (
 	"bytes"
@@ -16,87 +16,111 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/bugfan/acme/certcrypto"
 	"github.com/bugfan/acme/certificate"
 	"github.com/bugfan/acme/lego"
-	"github.com/bugfan/acme/provider"
 	"github.com/bugfan/acme/registration"
 )
 
-func main() {
+const LetsEncrypt = "https://acme-v02.api.letsencrypt.org/directory"
 
-	Obtain()
+// const LetsEncrypt = "https://acme-staging-v02.api.letsencrypt.org/directory"
+
+func NewACME(Email string) (*ACME, error) {
+	return NewACMEWithDir(Email, "")
 }
-func Obtain() {
-	// Create a user. New accounts need an email and private key to start.
+
+func NewACMEWithDir(Email string, LetsEncryptDIR string) (*ACME, error) {
+	if !CheckEmail(Email) {
+		return nil, errors.New(fmt.Sprintf("email:%s is error", Email))
+	}
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-
-	myUser := MyUser{
-		Email: "917719033@qq.com",
+	user := &acmeUser{
+		Email: Email,
 		key:   privateKey,
 	}
-
-	config := lego.NewConfig(&myUser)
-
+	acme := &ACME{
+		user: user,
+	}
+	config := lego.NewConfig(acme.user)
 	// This CA URL is configured for a local dev instance of Boulder running in Docker in a VM.
-	config.CADirURL = "https://acme-v02.api.letsencrypt.org/directory"
+	config.CADirURL = LetsEncrypt
+	// Custom LetsEncrypt dir
+	if LetsEncryptDIR != "" {
+		config.CADirURL = LetsEncryptDIR
+	}
 	config.Certificate.KeyType = certcrypto.RSA2048
 
 	// A client facilitates communication with the CA server.
 	client, err := lego.NewClient(config)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+	acme.cli = client
+	return acme, nil
+}
 
+type ACME struct {
+	cli           *lego.Client
+	user          *acmeUser
+	http01Handler http.Handler
+}
+
+func (a *ACME) SetHTTPHandler(h http.Handler) {
+	a.http01Handler = h
+}
+
+func (a *ACME) Obtain(domain ...string) {
 	// We specify an HTTP port of 5002 and an TLS port of 5001 on all interfaces
 	// because we aren't running as root and can't bind a listener to port 80 and 443
 	// (used later when we attempt to pass challenges). Keep in mind that you still
 	// need to proxy challenge traffic to port 5002 and 5001.
-	http01 := provider.NewHTTP01Provider()
-	tls01 := provider.NewTLSALPN01Provider()
+	http01 := NewHTTP01Provider()
+	// tls01 := NewTLSALPN01Provider()
 
 	av := os.Getenv("ACME_V")
-	if av != "" {
+	if av == "" {
 		go func() {
 			http.ListenAndServe(":80", http01)
 		}()
 	} else {
-		go func() {
-			http.ListenAndServe(":443", nil)
-		}()
+		// go func() {
+		// 	http.ListenAndServe(":443", nil)
+		// }()
 	}
 
-	if av != "" {
+	if av == "" {
 		time.Sleep(1e9)
-		err = client.Challenge.SetHTTP01Provider(http01)
+		err := a.cli.Challenge.SetHTTP01Provider(http01)
 		if err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		time.Sleep(1e9)
-		err = client.Challenge.SetTLSALPN01Provider(tls01)
-		if err != nil {
-			log.Fatal(err)
-		}
+		// time.Sleep(1e9)
+		// err = client.Challenge.SetTLSALPN01Provider(tls01)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
 	}
 
-	// New users will need to register
-	reg, err := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+	// // New users will need to register
+	reg, err := a.cli.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
 		log.Fatal(err)
 	}
-	myUser.Registration = reg
+	a.user.Registration = reg
 
 	request := certificate.ObtainRequest{
-		Domains: []string{"www.lbelieve.cn"},
+		Domains: domain,
 		Bundle:  true,
 	}
-	certificates, err := client.Certificate.Obtain(request)
+	certificates, err := a.cli.Certificate.Obtain(request)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -109,6 +133,29 @@ func Obtain() {
 	crt, err := ParseCertificate(string(certificates.Certificate)+string(certificates.IssuerCertificate), string(certificates.PrivateKey))
 	fmt.Println("CERT:", err, crt.Key, crt.Cert, crt.Intermediate)
 }
+
+type acmeUser struct {
+	Email        string
+	Registration *registration.Resource
+	key          crypto.PrivateKey
+}
+
+func (u *acmeUser) GetEmail() string {
+	return u.Email
+}
+func (u acmeUser) GetRegistration() *registration.Resource {
+	return u.Registration
+}
+func (u *acmeUser) GetPrivateKey() crypto.PrivateKey {
+	return u.key
+}
+
+type Certificate struct {
+	Cert         string
+	Key          string
+	Intermediate string
+}
+
 func ParseCertificate(certPEMBlock, keyPEMBlock string) (*Certificate, error) {
 	tlsCert, err := tls.X509KeyPair([]byte(certPEMBlock), []byte(keyPEMBlock))
 	if err != nil {
@@ -144,25 +191,13 @@ func ParseCertificate(certPEMBlock, keyPEMBlock string) (*Certificate, error) {
 	}, nil
 }
 
-// You'll need a user or account type that implements acme.User
-type MyUser struct {
-	Email        string
-	Registration *registration.Resource
-	key          crypto.PrivateKey
-}
-
-func (u *MyUser) GetEmail() string {
-	return u.Email
-}
-func (u MyUser) GetRegistration() *registration.Resource {
-	return u.Registration
-}
-func (u *MyUser) GetPrivateKey() crypto.PrivateKey {
-	return u.key
-}
-
-type Certificate struct {
-	Cert         string
-	Key          string
-	Intermediate string
+func CheckEmail(email string) bool {
+	if len(email) == 0 || len(email) >= 255 {
+		return false
+	}
+	emailRegexp := regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+	if !emailRegexp.MatchString(email) {
+		return false
+	}
+	return true
 }
