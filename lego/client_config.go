@@ -49,7 +49,7 @@ func NewConfig(user registration.User) *Config {
 		HTTPClient: createDefaultHTTPClient(),
 		Certificate: CertificateConfig{
 			KeyType: certcrypto.RSA2048,
-			Timeout: 30 * time.Second,
+			Timeout: 60 * time.Second,
 		},
 	}
 }
@@ -68,11 +68,11 @@ func createDefaultHTTPClient() *http.Client {
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
+				Timeout:   60 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
-			TLSHandshakeTimeout:   30 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
+			TLSHandshakeTimeout:   60 * time.Second,
+			ResponseHeaderTimeout: 60 * time.Second,
 			TLSClientConfig: &tls.Config{
 				ServerName: os.Getenv(caServerNameEnvVar),
 				RootCAs:    initCertPool(),
