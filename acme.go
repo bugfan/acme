@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -27,12 +28,18 @@ const LetsEncrypt = "https://acme-v02.api.letsencrypt.org/directory"
 
 // const LetsEncrypt = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
-func NewACME(Email string) (*ACME, error) {
+type ACME interface {
+	SetHTTP01Provider(HTTP01Provider)
+	SetTLSALPN01Provider(TLSALPN01Provider)
+	Obtain(...string) (*Certificate, error)
+}
+
+func NewACME(Email string) (ACME, error) {
 	return NewACMEWithDir(Email, "")
 }
 
-func NewACMEWithDir(Email string, LetsEncryptDIR string) (*ACME, error) {
-	if !CheckEmail(Email) {
+func NewACMEWithDir(Email string, LetsEncryptDIR string) (ACME, error) {
+	if !checkEmail(Email) {
 		return nil, errors.New(fmt.Sprintf("email:%s is error", Email))
 	}
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -43,10 +50,10 @@ func NewACMEWithDir(Email string, LetsEncryptDIR string) (*ACME, error) {
 		Email: Email,
 		key:   privateKey,
 	}
-	acme := &ACME{
+	o := &acme{
 		user: user,
 	}
-	config := lego.NewConfig(acme.user)
+	config := lego.NewConfig(o.user)
 	// This CA URL is configured for a local dev instance of Boulder running in Docker in a VM.
 	config.CADirURL = LetsEncrypt
 	// Custom LetsEncrypt dir
@@ -60,44 +67,51 @@ func NewACMEWithDir(Email string, LetsEncryptDIR string) (*ACME, error) {
 	if err != nil {
 		return nil, err
 	}
-	acme.cli = client
-	return acme, nil
+	o.cli = client
+	return o, nil
 }
 
-type ACME struct {
-	cli            *lego.Client
-	user           *acmeUser
-	http01Provider Provider
+type acme struct {
+	cli               *lego.Client
+	user              *acmeUser
+	http01Provider    HTTP01Provider
+	tlsalpn01Provider TLSALPN01Provider
 }
 
-func (a *ACME) SetHTTP01Provider(p Provider) {
+// if set , use given http handler
+func (a *acme) SetHTTP01Provider(p HTTP01Provider) {
 	a.http01Provider = p
 }
 
-func (a *ACME) Obtain(domain ...string) (*Certificate, error) {
-	// http01 := NewHTTP01Provider()
-	// tls01 := NewTLSALPN01Provider()
+// if set , use given tls handler
+func (a *acme) SetTLSALPN01Provider(p TLSALPN01Provider) {
+	a.tlsalpn01Provider = p
+}
 
+func (a *acme) Obtain(domain ...string) (*Certificate, error) {
 	if a.http01Provider != nil {
 		go func() {
-			http.ListenAndServe(":80", a.http01Provider)
+			log.Printf("acme http01 bind error:%s", http.ListenAndServe(":80", a.http01Provider))
 		}()
 		time.Sleep(time.Second / 10)
 	}
 
-	// go func() {
-	// 	http.ListenAndServe(":443", nil)
-	// }()
+	if a.tlsalpn01Provider != nil {
+		go func() {
+			log.Printf("acme tlsalpn01 bind error:%s", http.ListenAndServe(":443", nil)) // todo tls
+		}()
+		time.Sleep(time.Second / 10)
+	}
 
 	err := a.cli.Challenge.SetHTTP01Provider(a.http01Provider)
 	if err != nil {
 		return nil, err
 	}
 
-	// err = client.Challenge.SetTLSALPN01Provider(tls01)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	err = a.cli.Challenge.SetTLSALPN01Provider(a.tlsalpn01Provider)
+	if err != nil {
+		return nil, err
+	}
 
 	reg, err := a.cli.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
@@ -176,7 +190,7 @@ func ParseCertificate(certPEMBlock, keyPEMBlock string) (*Certificate, error) {
 	}, nil
 }
 
-func CheckEmail(email string) bool {
+func checkEmail(email string) bool {
 	if len(email) == 0 || len(email) >= 255 {
 		return false
 	}
