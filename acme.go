@@ -2,6 +2,7 @@ package acme
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -12,6 +13,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"regexp"
 
@@ -32,10 +34,6 @@ type ACME interface {
 }
 
 func NewACME(Email string) (ACME, error) {
-	return NewACMEWithDir(Email, "")
-}
-
-func NewACMEWithDir(Email string, LetsEncryptDIR string) (ACME, error) {
 	if !checkEmail(Email) {
 		return nil, errors.New(fmt.Sprintf("email:%s is error", Email))
 	}
@@ -53,10 +51,6 @@ func NewACMEWithDir(Email string, LetsEncryptDIR string) (ACME, error) {
 	config := lego.NewConfig(o.user)
 	// This CA URL is configured for a local dev instance of Boulder running in Docker in a VM.
 	config.CADirURL = LetsEncrypt
-	// Custom LetsEncrypt dir
-	if LetsEncryptDIR != "" {
-		config.CADirURL = LetsEncryptDIR
-	}
 	config.Certificate.KeyType = certcrypto.RSA2048
 
 	// A client facilitates communication with the CA server.
@@ -75,42 +69,43 @@ type acme struct {
 	tlsalpn01Provider Provider
 }
 
-// if set , use given http handler
 func (a *acme) SetHTTP01Provider(p HTTP01Provider) {
 	a.http01Provider = p
 }
 
-// if set , use given tls handler
 func (a *acme) SetTLSALPN01Provider(p Provider) {
 	a.tlsalpn01Provider = p
 }
 
 func (a *acme) Obtain(domain ...string) (cert *Certificate, err error) {
-	// if a.http01Provider == nil && a.tlsalpn01Provider == nil {
-	// 	return nil, errors.New("no provider found!")
-	// }
-	// if a.http01Provider != nil {
-	// 	go func() {
-	// 		log.Printf("acme http01 bind error:%s", http.ListenAndServe(":80", a.http01Provider))
-	// 	}()
-	// 	time.Sleep(time.Second / 10)
-	// }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if a.http01Provider == nil && a.tlsalpn01Provider == nil {
+		return nil, errors.New("no provider found!")
+	}
+	if a.http01Provider != nil {
+		p := &http.Server{Handler: a.http01Provider}
+		go func() {
+			<-ctx.Done()
+			p.Shutdown(ctx)
+		}()
+		go func() {
+			fmt.Println("Listening At '80'")
+			err := p.ListenAndServe()
+			fmt.Println("Listen '80' end:", err)
+		}()
+		err = a.cli.Challenge.SetHTTP01Provider(a.http01Provider)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	// if a.tlsalpn01Provider != nil {
-	// 	go func() {
-	// 		log.Printf("acme tlsalpn01 bind error:%s", http.ListenAndServe(":443", nil)) // todo tls
-	// 	}()
-	// 	time.Sleep(time.Second / 10)
-	// }
-
-	// err = a.cli.Challenge.SetHTTP01Provider(a.http01Provider)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// err = a.cli.Challenge.SetTLSALPN01Provider(a.tlsalpn01Provider) //tlsalpn01.NewProviderServer("", "5600"))
-	// if err != nil {
-	// 	return nil, err
-	// }
+	if a.tlsalpn01Provider != nil {
+		err = a.cli.Challenge.SetTLSALPN01Provider(a.tlsalpn01Provider)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	reg, err := a.cli.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
