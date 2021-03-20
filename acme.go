@@ -12,11 +12,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
-	"net/http"
 	"os"
 	"regexp"
-	"time"
 
 	"github.com/bugfan/acme/certcrypto"
 	"github.com/bugfan/acme/certificate"
@@ -30,8 +27,8 @@ const LetsEncrypt = "https://acme-v02.api.letsencrypt.org/directory"
 
 type ACME interface {
 	SetHTTP01Provider(HTTP01Provider)
-	SetTLSALPN01Provider(TLSALPN01Provider)
-	Obtain(...string) (*Certificate, error)
+	SetTLSALPN01Provider(Provider)
+	Obtain(domains ...string) (*Certificate, error)
 }
 
 func NewACME(Email string) (ACME, error) {
@@ -75,7 +72,7 @@ type acme struct {
 	cli               *lego.Client
 	user              *acmeUser
 	http01Provider    HTTP01Provider
-	tlsalpn01Provider TLSALPN01Provider
+	tlsalpn01Provider Provider
 }
 
 // if set , use given http handler
@@ -84,34 +81,36 @@ func (a *acme) SetHTTP01Provider(p HTTP01Provider) {
 }
 
 // if set , use given tls handler
-func (a *acme) SetTLSALPN01Provider(p TLSALPN01Provider) {
+func (a *acme) SetTLSALPN01Provider(p Provider) {
 	a.tlsalpn01Provider = p
 }
 
-func (a *acme) Obtain(domain ...string) (*Certificate, error) {
-	if a.http01Provider != nil {
-		go func() {
-			log.Printf("acme http01 bind error:%s", http.ListenAndServe(":80", a.http01Provider))
-		}()
-		time.Sleep(time.Second / 10)
-	}
+func (a *acme) Obtain(domain ...string) (cert *Certificate, err error) {
+	// if a.http01Provider == nil && a.tlsalpn01Provider == nil {
+	// 	return nil, errors.New("no provider found!")
+	// }
+	// if a.http01Provider != nil {
+	// 	go func() {
+	// 		log.Printf("acme http01 bind error:%s", http.ListenAndServe(":80", a.http01Provider))
+	// 	}()
+	// 	time.Sleep(time.Second / 10)
+	// }
 
-	if a.tlsalpn01Provider != nil {
-		go func() {
-			log.Printf("acme tlsalpn01 bind error:%s", http.ListenAndServe(":443", nil)) // todo tls
-		}()
-		time.Sleep(time.Second / 10)
-	}
+	// if a.tlsalpn01Provider != nil {
+	// 	go func() {
+	// 		log.Printf("acme tlsalpn01 bind error:%s", http.ListenAndServe(":443", nil)) // todo tls
+	// 	}()
+	// 	time.Sleep(time.Second / 10)
+	// }
 
-	err := a.cli.Challenge.SetHTTP01Provider(a.http01Provider)
-	if err != nil {
-		return nil, err
-	}
-
-	err = a.cli.Challenge.SetTLSALPN01Provider(a.tlsalpn01Provider)
-	if err != nil {
-		return nil, err
-	}
+	// err = a.cli.Challenge.SetHTTP01Provider(a.http01Provider)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// err = a.cli.Challenge.SetTLSALPN01Provider(a.tlsalpn01Provider) //tlsalpn01.NewProviderServer("", "5600"))
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	reg, err := a.cli.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
@@ -153,6 +152,18 @@ type Certificate struct {
 	Cert         string
 	Key          string
 	Intermediate string
+}
+
+func (c *Certificate) TLSCertficate() (*tls.Certificate, error) {
+	crt, err := tls.X509KeyPair([]byte(fmt.Sprintf("%s\n%s", c.Cert, c.Intermediate)), []byte(c.Key))
+	if err != nil {
+		return nil, err
+	}
+	return &crt, nil
+}
+
+func (c *Certificate) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return c.TLSCertficate()
 }
 
 func ParseCertificate(certPEMBlock, keyPEMBlock string) (*Certificate, error) {

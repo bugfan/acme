@@ -38,3 +38,13 @@ root@VM-0-10-ubuntu:/home# ./acem
 2021/03/10 18:20:39 acme: Error -> One or more domains had a problem:
 [www.lbelieve.cn] acme: error: 400 :: urn:ietf:params:acme:error:malformed :: Server only speaks HTTP, not TLS, url:
  ```
+ ```
+ // 443没监听
+2021/03/20 22:32:57 Unable to deactivate the authorization: https://acme-v02.api.letsencrypt.org/acme/authz-v3/11705545896
+obtain result2: error: one or more domains had a problem:
+[www.lbelieve.cn] acme: error: 400 :: urn:ietf:params:acme:error:connection :: Connection refused
+ ```
+ ```
+ // tls server tlsconfig配置缺东西
+%w tls: neither Certificates, GetCertificate, nor GetConfigForClient set in Config
+ ```

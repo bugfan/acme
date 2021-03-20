@@ -2,6 +2,10 @@ package acme
 
 import (
 	"crypto/tls"
+	"errors"
+	"fmt"
+	"log"
+	"net"
 	"net/http"
 	"strings"
 
@@ -17,11 +21,6 @@ type Provider interface {
 
 type HTTP01Provider interface {
 	ServeHTTP(http.ResponseWriter, *http.Request)
-	Provider
-}
-
-type TLSALPN01Provider interface {
-	GetCertificate(info *tls.ClientHelloInfo) (*tls.Certificate, error)
 	Provider
 }
 
@@ -79,40 +78,75 @@ func challengePath(token string) string {
 	return PathPrefix + "/" + token
 }
 
-func NewTLSALPN01Provider(h http.Handler) TLSALPN01Provider {
-	tlsalpn01 := &tlsalpn01Provider{
-		tokens:   make(map[string]string),
-		keyAuths: make(map[string]string),
+/*
+*	tlsalpn01
+ */
+
+const (
+	// ACMETLS1Protocol is the ALPN Protocol ID for the ACME-TLS/1 Protocol.
+	ACMETLS1Protocol = "acme-tls/1"
+	defaultTLSPort   = "443"
+)
+
+type ProviderServer struct {
+	iface    string
+	port     string
+	listener net.Listener
+}
+
+func NewProviderServer(iface, port string) Provider {
+	return &ProviderServer{iface: iface, port: port}
+}
+
+// Present generates a certificate with a SHA-256 digest of the keyAuth provided
+// as the acmeValidation-v1 extension value to conform to the ACME-TLS-ALPN spec.
+func (s *ProviderServer) Present(domain, token, keyAuth string) error {
+	if s.port == "" {
+		// Fallback to port 443 if the port was not provided.
+		s.port = defaultTLSPort
 	}
-	return tlsalpn01
-}
 
-type tlsalpn01Provider struct {
-	tokens   map[string]string
-	keyAuths map[string]string
-}
-
-func (s *tlsalpn01Provider) Present(domain, token, keyAuth string) error {
-	s.tokens[domain] = token
-	s.keyAuths[domain] = keyAuth
-	return nil
-}
-
-func (s *tlsalpn01Provider) CleanUp(domain, token, keyAuth string) error {
-	if _, ok := s.tokens[domain]; ok {
-		delete(s.tokens, domain)
+	// Generate the challenge certificate using the provided keyAuth and domain.
+	cert, err := tlsalpn01.ChallengeCert(domain, keyAuth)
+	if err != nil {
+		return err
 	}
 
-	if _, ok := s.keyAuths[domain]; ok {
-		delete(s.keyAuths, domain)
+	// Place the generated certificate with the extension into the TLS config
+	// so that it can serve the correct details.
+	tlsConf := new(tls.Config)
+	tlsConf.Certificates = []tls.Certificate{*cert}
+
+	// We must set that the `acme-tls/1` application level protocol is supported
+	// so that the protocol negotiation can succeed. Reference:
+	// https://tools.ietf.org/html/draft-ietf-acme-tls-alpn-07#section-6.2
+	tlsConf.NextProtos = []string{ACMETLS1Protocol}
+
+	// Create the listener with the created tls.Config.
+	s.listener, err = tls.Listen("tcp", net.JoinHostPort(s.iface, s.port), tlsConf)
+	if err != nil {
+		return fmt.Errorf("could not start HTTPS server for challenge: %w", err)
 	}
-	return nil
-}
-func (s *tlsalpn01Provider) GetCertificate(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	for _, v := range info.SupportedProtos {
-		if k, has := s.keyAuths[info.ServerName]; has && v == "acme-tls/1" {
-			return tlsalpn01.ChallengeCert(info.ServerName, k)
+
+	// Shut the server down when we're finished.
+	go func() {
+		err := http.Serve(s.listener, nil)
+		if err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
+			log.Println(err)
 		}
+	}()
+
+	return nil
+}
+
+// CleanUp closes the HTTPS server.
+func (s *ProviderServer) CleanUp(domain, token, keyAuth string) error {
+	if s.listener == nil {
+		return nil
 	}
-	return nil, nil
+	// Server was created, close it.
+	if err := s.listener.Close(); err != nil && errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
