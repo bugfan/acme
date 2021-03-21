@@ -1,13 +1,13 @@
-package lego
+package le
 
 import (
 	"errors"
 	"net/url"
 
+	"github.com/bugfan/acme/acme/api"
 	"github.com/bugfan/acme/certificate"
 	"github.com/bugfan/acme/registration"
 	"github.com/bugfan/acme/resolver"
-	"github.com/bugfan/acme/acme/api"
 )
 
 // Client is the user-friendly way to ACME.

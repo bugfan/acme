@@ -19,7 +19,7 @@ import (
 
 	"github.com/bugfan/acme/certcrypto"
 	"github.com/bugfan/acme/certificate"
-	"github.com/bugfan/acme/lego"
+	"github.com/bugfan/acme/le"
 	"github.com/bugfan/acme/registration"
 )
 
@@ -48,13 +48,13 @@ func NewACME(Email string) (ACME, error) {
 	o := &acme{
 		user: user,
 	}
-	config := lego.NewConfig(o.user)
+	config := le.NewConfig(o.user)
 	// This CA URL is configured for a local dev instance of Boulder running in Docker in a VM.
 	config.CADirURL = LetsEncrypt
 	config.Certificate.KeyType = certcrypto.RSA2048
 
 	// A client facilitates communication with the CA server.
-	client, err := lego.NewClient(config)
+	client, err := le.NewClient(config)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func NewACME(Email string) (ACME, error) {
 }
 
 type acme struct {
-	cli               *lego.Client
+	cli               *le.Client
 	user              *acmeUser
 	http01Provider    HTTP01Provider
 	tlsalpn01Provider Provider

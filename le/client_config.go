@@ -1,4 +1,4 @@
-package lego
+package le
 
 import (
 	"crypto/tls"
