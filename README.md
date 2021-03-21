@@ -115,7 +115,7 @@ func main(){
 }
 ```
 ```
-// demo2.1 你的服务占用了443
+// demo2 你的服务占用了443
 import "github.com/bugfan/acme"
 var myacme acme.ACME
 func init() {
