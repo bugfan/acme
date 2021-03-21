@@ -1,7 +1,10 @@
 package acme
 
 import (
+	"crypto/tls"
+	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/bugfan/acme/challenge/tlsalpn01"
@@ -76,6 +79,80 @@ func challengePath(token string) string {
 /*
 *	tlsalpn01
  */
-func NewProviderServer(iface, port string) Provider {
-	return tlsalpn01.NewProviderServer(iface, port)
+
+const ACMETLS1Protocol = "acme-tls/1"
+
+/*
+*  usage
+ */
+// 1. port 443 not occupied
+func NewDefaultTLSALPN01Provider() Provider {
+	return tlsalpn01.NewProviderServer("", "443")
+}
+
+type Certificates interface {
+	Certificates() []tls.Certificate
+}
+type GetCertificate interface {
+	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
+}
+type GetConfigForClient interface {
+	GetConfigForClient(*tls.ClientHelloInfo) (*tls.Config, error)
+}
+
+// 2. customize tls server
+// tls: neither Certificates, GetCertificate, nor GetConfigForClient set in Config
+func NewACMETLSConfig(tlsconfig *tls.Config, certProvider interface{}) (*tls.Config, error) {
+	if tlsconfig == nil {
+		return nil, errors.New("tlsconfig is nil")
+	}
+	if certProvider == nil {
+		return nil, errors.New("at least one certificate provider")
+	}
+	cpok := false
+	if !cpok {
+		reflectVal := reflect.ValueOf(certProvider)
+		t := reflect.Indirect(reflectVal).Type()
+		newObj := reflect.New(t)
+		handler, ok := newObj.Interface().(Certificates)
+		if ok {
+			cpok = true
+			tlsconfig.Certificates = handler.Certificates()
+		}
+	}
+	if !cpok {
+		reflectVal := reflect.ValueOf(certProvider)
+		t := reflect.Indirect(reflectVal).Type()
+		newObj := reflect.New(t)
+		handler, ok := newObj.Interface().(GetCertificate)
+		if ok {
+			cpok = true
+			tlsconfig.GetCertificate = handler.GetCertificate
+		}
+	}
+	if !cpok {
+		reflectVal := reflect.ValueOf(certProvider)
+		t := reflect.Indirect(reflectVal).Type()
+		newObj := reflect.New(t)
+		handler, ok := newObj.Interface().(GetConfigForClient)
+		if ok {
+			cpok = true
+			tlsconfig.GetConfigForClient = handler.GetConfigForClient
+		}
+	}
+	if !cpok {
+		return tlsconfig, errors.New("not found tls cert provider")
+	}
+
+	np := false
+	for _, n := range tlsconfig.NextProtos {
+		if n == ACMETLS1Protocol {
+			np = true
+			break
+		}
+	}
+	if !np {
+		tlsconfig.NextProtos = append(tlsconfig.NextProtos, ACMETLS1Protocol)
+	}
+	return tlsconfig, nil
 }

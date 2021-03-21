@@ -1,16 +1,4 @@
- ### acme 方式
- ```
- # 用http方式验证，占用80端口
- ./lego --email="mail@qq.com" --domains="domain.com" --http run
-
- # 用tls方式验证，占用443端口
- ./lego --email="mail@qq.com" --domains="domain.com" --tls run
-
-
- # 用dns方式验证，不占端口，解析需要对,dns provider 很多需要根据云厂商切换
- ./lego --email="mail@qq.com" --domains="domain.com" --dns="route53|namecheap" run
- ```
-
+ ### acme prod
 ```
 HTTP-01：通过HTTP访问服务器80端口的.well-known/acme-challenge验证。
 DNS-01：在DNS中添加_acme-challenge开头的TXT记录，这种方式因为能签发通配符证书（Wildcard）而被大范围使用。
@@ -62,4 +50,9 @@ obtain result2: error: one or more domains had a problem:
  ```
  // tls server tlsconfig配置缺东西
 %w tls: neither Certificates, GetCertificate, nor GetConfigForClient set in Config
+ ```
+ 5. rate
+ ```
+2021/03/21 19:12:14 [app.lt53.cn] acme: Obtaining bundled SAN certificate
+obtain result2: acme: error: 429 :: POST :: https://acme-v02.api.letsencrypt.org/acme/new-order :: urn:ietf:params:acme:error:rateLimited :: Error creating new order :: too many certificates already issued for exact set of domains: app.lt53.cn: see https://letsencrypt.org/docs/rate-limits/
  ```

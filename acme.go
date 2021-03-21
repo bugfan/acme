@@ -78,16 +78,18 @@ func (a *acme) SetTLSALPN01Provider(p Provider) {
 }
 
 func (a *acme) Obtain(domain ...string) (cert *Certificate, err error) {
+	if a.http01Provider == nil && a.tlsalpn01Provider == nil {
+		return nil, errors.New("no acme provider found!")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if a.http01Provider == nil && a.tlsalpn01Provider == nil {
-		return nil, errors.New("no provider found!")
-	}
 	if a.http01Provider != nil {
 		p := &http.Server{Handler: a.http01Provider}
 		go func() {
 			<-ctx.Done()
-			p.Shutdown(ctx)
+			if p != nil {
+				p.Shutdown(ctx)
+			}
 		}()
 		go func() {
 			fmt.Println("Listening At '80'")
