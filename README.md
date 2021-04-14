@@ -234,3 +234,10 @@ obtain result2: error: one or more domains had a problem:
 2021/03/21 19:12:14 [app.xxx.cn] acme: Obtaining bundled SAN certificate
 obtain result2: acme: error: 429 :: POST :: https://acme-v02.api.letsencrypt.org/acme/new-order :: urn:ietf:params:acme:error:rateLimited :: Error creating new order :: too many certificates already issued for exact set of domains: app.xxx.cn: see https://letsencrypt.org/docs/rate-limits/
  ```
+
+6. 解析不对
+ ```
+www.xxx.cn 签发失败: get directory at 'https://acme-v02.api.letsencrypt.org/directory': Get "https://acme-v02.api.letsencrypt.org/directory": dial tcp: lookup acme-v02.api.letsencrypt.org on 127.0.0.11:53: server misbehaving
+
+解析不对，进入app这个容器（或者主机）内部，执行 echo '172.65.32.248 acme-v02.api.letsencrypt.org' > /etc/hosts
+```
