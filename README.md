@@ -5,7 +5,7 @@
 
 ### acme prod
 ```
-HTTP-01：通过HTTP访问服务器80端口的.well-known/acme-challenge验证。
+HTTP-01：通过HTTP访问服务器80端口的/.well-known/acme-challenge验证。
 DNS-01：在DNS中添加_acme-challenge开头的TXT记录，这种方式因为能签发通配符证书（Wildcard）而被大范围使用。
 TLS-SNI-01、TLS-ALPN-01：通过TLS的方式对443端口访问进行验证。(TLS-ALPN-01支持的客户端非常少,TLS-SNI因为漏洞被遗弃)
 ```
