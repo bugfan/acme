@@ -74,8 +74,9 @@ func createDefaultHTTPClient() *http.Client {
 			TLSHandshakeTimeout:   60 * time.Second,
 			ResponseHeaderTimeout: 60 * time.Second,
 			TLSClientConfig: &tls.Config{
-				ServerName: os.Getenv(caServerNameEnvVar),
-				RootCAs:    initCertPool(),
+				InsecureSkipVerify: true,
+				ServerName:         os.Getenv(caServerNameEnvVar),
+				RootCAs:            initCertPool(),
 			},
 		},
 	}
