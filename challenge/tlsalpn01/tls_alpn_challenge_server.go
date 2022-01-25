@@ -57,6 +57,7 @@ func (s *ProviderServer) Present(domain, token, keyAuth string) error {
 	// Place the generated certificate with the extension into the TLS config
 	// so that it can serve the correct details.
 	tlsConf := new(tls.Config)
+	tlsConf.InsecureSkipVerify = true
 	tlsConf.Certificates = []tls.Certificate{*cert}
 
 	// We must set that the `acme-tls/1` application level protocol is supported
