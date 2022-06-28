@@ -204,7 +204,7 @@ func (h *H) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error)
 
 <br>
 
-## 🐛 签发免费常见问题
+## 🐛 签发免费证书常见问题
 - http 没有备案被云厂商拦截了
  ```
 [app.xxx.cn] acme: error: 403 :: urn:ietf:params:acme:error:unauthorized :: During secondary validation: Invalid response from https://dnspod.qcloud.com/static/webblock.html?d=app.xxx.cn [203.205.224.59]: "<!DOCTYPE html>\n<html>\n\t<head>\n\t\t<meta charset=\"utf-8\" />\n\t\t<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge,chrome=1\" />\n\t\t<", url: 
