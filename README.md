@@ -5,13 +5,13 @@
 
 <br>
 
+## ✨ 简介
+
 HTTP-01：通过HTTP访问服务器80端口的/.well-known/acme-challenge验证。
 DNS-01：在DNS中添加_acme-challenge开头的TXT记录，这种方式因为能签发通配符证书（Wildcard）而被大范围使用。
 TLS-SNI-01、TLS-ALPN-01：通过TLS的方式对443端口访问进行验证。(TLS-ALPN-01支持的客户端非常少,TLS-SNI因为漏洞被遗弃)
 
 <br>
-
-## ✨ Features
 
 - tls
 ```
@@ -41,7 +41,7 @@ server {
 
 <br>
 
-## 🦊 Some Demo
+## 🦊 如何使用？👇是一些例子
 
 - http01方式
 ```
@@ -204,7 +204,7 @@ func (h *H) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error)
 
 <br>
 
-## 🐛 some issue
+## 🐛 签发免费常见问题
 - http 没有备案被云厂商拦截了
  ```
 [app.xxx.cn] acme: error: 403 :: urn:ietf:params:acme:error:unauthorized :: During secondary validation: Invalid response from https://dnspod.qcloud.com/static/webblock.html?d=app.xxx.cn [203.205.224.59]: "<!DOCTYPE html>\n<html>\n\t<head>\n\t\t<meta charset=\"utf-8\" />\n\t\t<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge,chrome=1\" />\n\t\t<", url: 
